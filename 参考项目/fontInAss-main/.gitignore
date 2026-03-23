@@ -1,0 +1,25 @@
+
+localFontMap.json
+fonts
+TEST
+*.pyc
+
+test.ass
+# test
+data/localFonts.json
+profile.html
+profile.json
+src/processPool.py
+.vscode
+data/*
+*.back
+result.json
+src/py2cy/c_utils.c
+src/py2cy/*.so
+src/py2cy/*.pyd
+build/
+src/lib/analyseAss.so
+test/\[Haruhana] Shigatsu wa Kimi no Uso \[16].chs_jpn.ass
+test.result
+src/py2cy/c_utils.cpp
+src/subset/node_modules/*

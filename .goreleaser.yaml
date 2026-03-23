@@ -1,0 +1,101 @@
+version: 2
+
+project_name: MediaWarp
+
+git:
+  ignore_tags:
+    - pre-release
+
+snapshot:
+  version_template: "PreRelease-v{{ incpatch .Version }}-{{ .ShortCommit }}"
+
+release:
+  name_template: "{{ .Tag }}"
+  extra_files:
+    - glob: ./config/config.yaml.example
+      name_template: config.yaml
+    - glob: ./LICENSE
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - skip: false
+    env:
+      - GOPROXY=https://goproxy.io,direct
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      - goos: windows
+        goarm: 7
+    binary: "{{ .ProjectName }}"
+    ldflags:
+      - -s -w
+      - -X MediaWarp/internal/config.appVersion={{ .Version }}
+      - -X MediaWarp/internal/config.commitHash={{ .FullCommit }}
+      - -X MediaWarp/internal/config.buildDate={{ .Date }}
+
+dockers_v2:
+  - dockerfile: docker/Dockerfile
+    build_args:
+      APP_VERSION: "{{ .Version }}"
+      COMMIT_HASH: "{{ .FullCommit }}"
+      BUILD_DATE: "{{ .Date }}"
+    extra_files:
+      - go.mod
+      - go.sum
+      - main.go
+      - constants
+      - internal
+      - static
+      - utils
+    images:
+      - akimio/mediawarp
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    labels:
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+      - linux/arm/v7
+      - linux/riscv64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{- .Os }}_{{ .Arch }}{{- if .Arm}}v{{ .Arm }}{{- end}}"
+    # 对于 Windows 存档使用 zip 格式
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: LICENSE
+      - src: README.md
+      - src: config/config.yaml.example
+        dst: config.yaml.example
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^build:"
+      - "^ci:"
+      - "^release:"
+      - "^issue:"
+      - "^MediaWarp"

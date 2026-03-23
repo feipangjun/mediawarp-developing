@@ -1,0 +1,15 @@
+ass==0.5.4
+requests==2.32.3
+watchdog==6.0.0
+cachetools==5.5.1
+coloredlogs==15.0.1
+chardet==5.2.0
+uharfbuzz==0.45.0
+fastapi==0.115.6
+aiofiles==24.1.0
+aiohttp==3.11.11
+uvicorn==0.32.1
+SQLAlchemy==2.0.37
+tqdm==4.67.1
+freetype-py==2.5.1
+jsmin==3.0.1

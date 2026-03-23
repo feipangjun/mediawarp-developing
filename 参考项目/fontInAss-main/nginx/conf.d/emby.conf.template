@@ -1,0 +1,41 @@
+server {
+    listen 8012; #新的Emby访问端口
+    listen [::]:8012;
+    gzip $NGINX_GZIP;
+    gzip_http_version 1.0;
+    gzip_comp_level $NGINX_GZIP_COMP_LEVEL;
+    gzip_types text/x-ssa;
+
+    location ~ /(socket|embywebsocket) {
+        proxy_pass $EMBY_SERVER_URL;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+    }
+
+    location ~* /videos/(.*)/Subtitles/(.*)/(Stream.ass|Stream.ssa|Stream.srt|Stream.)$ {
+        proxy_pass http://127.0.0.1:8011;
+    }
+
+    location ~* /v/api/v1/subtitle/dl/(.*)  {
+        proxy_pass http://127.0.0.1:8011;
+    }
+
+    location ~* /web/modules/htmlvideoplayer/plugin.js {
+        proxy_pass $EMBY_WEB_EMBED_FONT;
+    }
+
+    location ~* /web/bower_components/(.*)/subtitles-octopus.js {
+        proxy_pass $EMBY_WEB_EMBED_FONT;
+    }
+
+    location / {
+        proxy_pass $EMBY_SERVER_URL;
+    }
+}
