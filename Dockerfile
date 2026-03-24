@@ -58,12 +58,17 @@ WORKDIR /app
 
 # 从第一阶段复制 MediaWarp 二进制文件
 COPY --from=mediawarp-builder /build/MediaWarp ./
+RUN chmod +x /app/MediaWarp
 
 # 从第二阶段复制 FontInAss
 COPY --from=fontinass-builder /build/fontinass ./fontinass/
 
 # 创建必要的目录
-RUN mkdir -p /logs && chown appuser:appgroup /logs
+RUN mkdir -p /logs && chown -R appuser:appgroup /logs
+
+# 启动脚本
+COPY docker/start.sh ./start.sh
+RUN chmod +x ./start.sh
 
 # 切换用户
 USER appuser
@@ -74,10 +79,6 @@ EXPOSE 9000
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:9000/health || exit 1
-
-# 启动脚本
-COPY docker/start.sh ./start.sh
-RUN chmod +x ./start.sh
 
 # 启动服务
 CMD ["./start.sh"]
