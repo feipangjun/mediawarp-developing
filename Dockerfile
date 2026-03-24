@@ -62,9 +62,6 @@ COPY --from=mediawarp-builder /build/MediaWarp ./
 # 从第二阶段复制 FontInAss
 COPY --from=fontinass-builder /build/fontinass ./fontinass/
 
-# 复制默认配置文件
-COPY config/config.yaml.example ./config/config.yaml
-
 # 创建必要的目录
 RUN mkdir -p /logs && chown appuser:appgroup /logs
 
@@ -93,16 +90,13 @@ RUN apk add --no-cache ca-certificates tzdata
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # 设置工作目录
-WORKDIR /app
+WORKDIR /mediawarp
 
 # 从第一阶段复制 MediaWarp 二进制文件
 COPY --from=mediawarp-builder /build/MediaWarp ./
 
 # 从第二阶段复制 FontInAss
 COPY --from=fontinass-builder /build/fontinass ./fontinass/
-
-# 复制默认配置文件
-COPY config/config.yaml.example ./config/config.yaml
 
 # 创建必要的目录
 RUN mkdir -p /logs && chown appuser:appgroup /logs
