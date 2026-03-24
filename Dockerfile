@@ -82,22 +82,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # 启动服务
 CMD ["./start.sh"]
-FROM alpine:latest
-
-# 安装运行时依赖
-RUN apk add --no-cache ca-certificates tzdata
-
-# 创建应用用户
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-# 设置工作目录
-WORKDIR /mediawarp
-
-# 从第一阶段复制 MediaWarp 二进制文件
-COPY --from=mediawarp-builder /build/MediaWarp ./
-
-# 从第二阶段复制 FontInAss
-COPY --from=fontinass-builder /build/fontinass ./fontinass/
 
 # 创建必要的目录
 RUN mkdir -p /logs && chown appuser:appgroup /logs
