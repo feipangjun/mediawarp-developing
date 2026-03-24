@@ -5,8 +5,8 @@
 FROM golang:1.21-alpine AS mediawarp-builder
 
 # 设置构建参数
-ARG APP_VERSION=0.24.0dev
-ARG COMMIT_HASH=unknown
+ARG APP_VERSION=1.0.1dev
+ARG COMMIT_HASH=ea77acc574ddd5eee477b6c091fc9f03be6bb788
 ARG BUILD_DATE=2026-03-24
 
 # 安装构建依赖
