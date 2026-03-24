@@ -2,7 +2,7 @@
 # 多阶段构建，将 MediaWarp (Go) 和 FontInAss (Python) 打包到同一个容器中
 
 # 第一阶段：构建 MediaWarp (Go)
-FROM golang:1.21-alpine AS mediawarp-builder
+FROM golang:1.26-alpine AS mediawarp-builder
 
 # 设置构建参数
 ARG APP_VERSION=1.0.1dev
