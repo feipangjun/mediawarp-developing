@@ -361,29 +361,35 @@ func (handler *EmbyHandler) processSubtitleContent(rw *http.Response, subtitleTy
 		logging.Debug("字幕内容预览：", string(subtitle[:min(len(subtitle), 200)]))
 	}
 
-	// 现有的 SRT 转 ASS 逻辑
-	if utils.IsSRT(subtitle) { // 判断是否为 SRT 格式
-		logging.Info(subtitleType, "文件为 SRT 格式")
-		if config.Subtitle.SRT2ASS {
-			logging.Info("已将 SRT", subtitleType, "转为 ASS 格式")
-			subtitle = utils.SRT2ASS(subtitle, config.Subtitle.ASSStyle)
-		}
-	}
+	// 检查原始字幕类型
+	isSRT := utils.IsSRT(subtitle)
+	isASS := isAssSubtitle(subtitle)
 
-	// 新增：ASS 字幕字体子集化
-	if config.Subtitle.SubSet && config.Subtitle.FontInAss.Enable {
-		// 检查是否为 ASS 字幕
-		if isAssSubtitle(subtitle) {
-			logging.Info("检测到 ASS", subtitleType, "，开始字体子集化处理")
-			processedSubtitle, err := handler.sendToFontInAss(subtitle)
-			if err == nil {
-				subtitle = processedSubtitle
-				logging.Info(subtitleType, "字体子集化处理完成，处理后大小：", len(subtitle), "字节")
-			} else {
-				logging.Warning("FontInAss 处理失败，使用原始", subtitleType, ":", err)
-			}
+	logging.Debug("字幕格式检测 - SRT:", isSRT, " ASS:", isASS)
+
+	// 如果是 ASS 字幕，并且启用了字体子集化，发送到 FontInAss
+	if isASS && config.Subtitle.SubSet && config.Subtitle.FontInAss.Enable {
+		logging.Info("检测到原始 ASS", subtitleType, "，开始字体子集化处理")
+		processedSubtitle, err := handler.sendToFontInAss(subtitle)
+		if err == nil {
+			subtitle = processedSubtitle
+			logging.Info(subtitleType, "字体子集化处理完成，处理后大小：", len(subtitle), "字节")
 		} else {
-			logging.Debug(subtitleType, "不是 ASS 格式，跳过字体子集化")
+			logging.Warning("FontInAss 处理失败，使用原始", subtitleType, ":", err)
+		}
+	} else if isSRT && config.Subtitle.SRT2ASS {
+		// 如果是 SRT 字幕，并且在 MediaWarp 中转成 ASS
+		logging.Info(subtitleType, "文件为 SRT 格式，转为 ASS 格式")
+		subtitle = utils.SRT2ASS(subtitle, config.Subtitle.ASSStyle)
+		logging.Info("已将 SRT", subtitleType, "转为 ASS 格式")
+	} else {
+		// 其他情况：既不是 ASS 也不是 SRT，或者未启用相关功能
+		if isSRT {
+			logging.Debug(subtitleType, "为 SRT 格式，但未启用 SRT2ASS，跳过转换")
+		} else if isASS {
+			logging.Debug(subtitleType, "为 ASS 格式，但未启用字体子集化，跳过处理")
+		} else {
+			logging.Debug(subtitleType, "为其他格式，跳过处理")
 		}
 	}
 
