@@ -44,13 +44,13 @@ func init() {
 
 // 检测 FontInAss 服务状态
 func checkFontInAssStatus() {
-	if !config.Subtitle.FontInAss.Enable {
-		logging.Info("FontInAss 服务: 未启用")
+	if !config.Subtitle.SubSet {
+		logging.Info("FontInAss 服务: 字幕子集化未启用")
 		return
 	}
 
 	if config.Subtitle.FontInAss.Addr == "" {
-		logging.Warning("FontInAss 服务: 已启用但地址未配置")
+		logging.Warning("FontInAss 服务: 字幕子集化已启用但地址未配置")
 		return
 	}
 
@@ -60,7 +60,7 @@ func checkFontInAssStatus() {
 
 	healthURL := config.Subtitle.FontInAss.Addr + "/api/mediawarp/subset"
 
-	// 发送 GET 请求检测服务状态（FontInAss 不支持 HEAD 方法）
+	// 发送 GET 请求检测服务状态
 	req, err := http.NewRequest("GET", healthURL, nil)
 	if err != nil {
 		logging.Warning("FontInAss 服务: 创建请求失败 - " + err.Error())

@@ -85,27 +85,13 @@ func NewEmbyServerHandler(addr string, apiKey string) (*EmbyHandler, error) {
 			}
 		}
 		if config.Subtitle.Enable {
-			// 添加字幕处理路由规则
-			handler.routerRules = append(handler.routerRules,
-				RegexpRouteRule{
-					Regexp: constants.EmbyRegexp.Router.ModifySubtitles,
-					Handler: responseModifyCreater(
-						&httputil.ReverseProxy{Director: handler.proxy.Director},
-						handler.ModifySubtitles,
-					),
-				},
-			)
-
-			// 添加内封字幕流处理路由规则（完全匹配 FontInAss 的 nginx 配置）
-			if config.Subtitle.SRT2ASS || config.Subtitle.SubSet {
+			// 将所有字幕请求转发到 FontInAss 处理
+			if config.Subtitle.SubSet {
 				handler.routerRules = append(handler.routerRules,
 					RegexpRouteRule{
 						// 匹配 FontInAss nginx 配置中的路径模式：/videos/(.*)/Subtitles/(.*)/(Stream.ass|Stream.ssa|Stream.srt|Stream.)
-						Regexp: regexp.MustCompile(`(?i)^(/emby)?/videos/(.*)/Subtitles/(.*)/(Stream\.(ass|ssa|srt)|Stream\.)$`),
-						Handler: responseModifyCreater(
-							&httputil.ReverseProxy{Director: handler.proxy.Director},
-							handler.ModifySubtitleStream,
-						),
+						Regexp:  regexp.MustCompile(`(?i)^(/emby)?/videos/(.*)/Subtitles/(.*)/(Stream.ass|Stream.ssa|Stream.srt|Stream.)$`),
+						Handler: handler.createFontInAssProxy(),
 					},
 				)
 			}
@@ -116,6 +102,30 @@ func NewEmbyServerHandler(addr string, apiKey string) (*EmbyHandler, error) {
 		return nil, fmt.Errorf("创建 HTTPStrm 处理器失败: %w", err)
 	}
 	return &handler, nil
+}
+
+// 创建 FontInAss 反向代理处理器
+func (handler *EmbyHandler) createFontInAssProxy() gin.HandlerFunc {
+	fontInAssURL, err := url.Parse(config.Subtitle.FontInAss.Addr)
+	if err != nil {
+		logging.Errorf("解析 FontInAss 地址失败: %v", err)
+		return nil
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(fontInAssURL)
+
+	// 修改请求路径，将字幕请求转发到 FontInAss 的对应端点
+	proxy.Director = func(req *http.Request) {
+		req.URL.Scheme = fontInAssURL.Scheme
+		req.URL.Host = fontInAssURL.Host
+
+		// 保持原始路径，让 FontInAss 处理原始字幕请求
+		logging.Debugf("将字幕请求转发到 FontInAss: %s", req.URL.Path)
+	}
+
+	return func(ctx *gin.Context) {
+		proxy.ServeHTTP(ctx.Writer, ctx.Request)
+	}
 }
 
 // 转发请求至上游服务器
@@ -290,112 +300,6 @@ func isAssSubtitle(content []byte) bool {
 	return strings.Contains(contentStr, "[Script Info]") &&
 		strings.Contains(contentStr, "[V4+ Styles]") &&
 		strings.Contains(contentStr, "[Events]")
-}
-
-// 发送字幕到 FontInAss 进行处理
-func (handler *EmbyHandler) sendToFontInAss(subtitle []byte) ([]byte, error) {
-	if !config.Subtitle.FontInAss.Enable || config.Subtitle.FontInAss.Addr == "" {
-		return nil, fmt.Errorf("FontInAss 未启用或地址未配置")
-	}
-
-	client := &http.Client{
-		Timeout: config.Subtitle.FontInAss.Timeout,
-	}
-
-	// 构建 FontInAss API 地址
-	fontInAssURL := config.Subtitle.FontInAss.Addr + "/api/mediawarp/subset"
-
-	// 发送 POST 请求到 FontInAss
-	resp, err := client.Post(fontInAssURL, "application/octet-stream", bytes.NewReader(subtitle))
-	if err != nil {
-		return nil, fmt.Errorf("连接 FontInAss 失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("FontInAss 处理失败: %s, 响应: %s", resp.Status, string(body))
-	}
-
-	// 读取处理后的字幕数据
-	processedSubtitle, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取 FontInAss 响应失败: %w", err)
-	}
-
-	return processedSubtitle, nil
-}
-
-// 处理字幕流请求（内封字幕）
-//
-// 处理 /videos/(.*)/Subtitles/(.*)/(Stream.ass|Stream.ssa|Stream.srt|Stream.) 等路径
-func (handler *EmbyHandler) ModifySubtitleStream(rw *http.Response) error {
-	return handler.processSubtitleContent(rw, "字幕流")
-}
-
-// 修改字幕
-//
-// 将 SRT 字幕转 ASS，并支持 FontInAss 字体子集化
-func (handler *EmbyHandler) ModifySubtitles(rw *http.Response) error {
-	return handler.processSubtitleContent(rw, "字幕")
-}
-
-// 通用的字幕处理逻辑
-func (handler *EmbyHandler) processSubtitleContent(rw *http.Response, subtitleType string) error {
-	// 检查是否为 304 Not Modified 响应
-	if rw.StatusCode == http.StatusNotModified {
-		logging.Debug("字幕", subtitleType, "请求返回 304 Not Modified，跳过处理")
-		return nil // 直接返回，不修改响应
-	}
-
-	defer rw.Body.Close()
-	subtitle, err := io.ReadAll(rw.Body) // 读取字幕文件
-	if err != nil {
-		logging.Warning("读取原始", subtitleType, " Body 出错：", err)
-		return err
-	}
-
-	// 添加调试信息：输出字幕大小和内容预览
-	logging.Info("处理", subtitleType, "请求，字幕大小：", len(subtitle), "字节")
-	if len(subtitle) > 0 && len(subtitle) < 1000 {
-		logging.Debug("字幕内容预览：", string(subtitle[:min(len(subtitle), 200)]))
-	}
-
-	// 检查原始字幕类型
-	isSRT := utils.IsSRT(subtitle)
-	isASS := isAssSubtitle(subtitle)
-
-	logging.Debug("字幕格式检测 - SRT:", isSRT, " ASS:", isASS)
-
-	// 如果是 ASS 字幕，并且启用了字体子集化，发送到 FontInAss
-	if isASS && config.Subtitle.SubSet && config.Subtitle.FontInAss.Enable {
-		logging.Info("检测到原始 ASS", subtitleType, "，开始字体子集化处理")
-		processedSubtitle, err := handler.sendToFontInAss(subtitle)
-		if err == nil {
-			subtitle = processedSubtitle
-			logging.Info(subtitleType, "字体子集化处理完成，处理后大小：", len(subtitle), "字节")
-		} else {
-			logging.Warning("FontInAss 处理失败，使用原始", subtitleType, ":", err)
-		}
-	} else if isSRT && config.Subtitle.SRT2ASS {
-		// 如果是 SRT 字幕，并且在 MediaWarp 中转成 ASS
-		logging.Info(subtitleType, "文件为 SRT 格式，转为 ASS 格式")
-		subtitle = utils.SRT2ASS(subtitle, config.Subtitle.ASSStyle)
-		logging.Info("已将 SRT", subtitleType, "转为 ASS 格式")
-	} else {
-		// 其他情况：既不是 ASS 也不是 SRT，或者未启用相关功能
-		if isSRT {
-			logging.Debug(subtitleType, "为 SRT 格式，但未启用 SRT2ASS，跳过转换")
-		} else if isASS {
-			logging.Debug(subtitleType, "为 ASS 格式，但未启用字体子集化，跳过处理")
-		} else {
-			logging.Debug(subtitleType, "为其他格式，跳过处理")
-		}
-	}
-
-	rw.Header.Set("Content-Length", strconv.Itoa(len(subtitle)))
-	rw.Body = io.NopCloser(bytes.NewReader(subtitle))
-	return nil
 }
 
 // 辅助函数：返回两个整数中的较小值

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mediawarp-with-fontinass:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediawarp-dev
+    ports:
+      - "9000:9000"  # MediaWarp 端口
+      - "8011:8011"  # FontInAss 端口
+    volumes:
+      - .:/app  # 挂载源代码用于开发
+      - ./config:/config
+      - ./logs:/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - MEDIAWARP_DEV=true
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    networks:
+      - mediawarp-dev-network
+
+networks:
+  mediawarp-dev-network:
+    driver: bridge

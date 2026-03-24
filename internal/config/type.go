@@ -94,7 +94,6 @@ type AlistStrmSetting struct {
 
 // FontInAss 设置
 type FontInAssSetting struct {
-	Enable  bool          `yaml:"enable"`
 	Addr    string        `yaml:"addr"`    // FontInAss 服务地址
 	Timeout time.Duration `yaml:"timeout"` // 请求超时时间
 }

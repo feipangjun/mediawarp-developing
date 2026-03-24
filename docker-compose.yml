@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mediawarp-with-fontinass:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediawarp-with-fontinass
+    ports:
+      - "9000:9000"  # MediaWarp 端口
+    volumes:
+      - ./config:/config:ro  # 挂载配置文件
+      - ./logs:/logs  # 挂载日志目录
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - mediawarp-network
+
+networks:
+  mediawarp-network:
+    driver: bridge
+
+volumes:
+  mediawarp-logs:
+    driver: local
